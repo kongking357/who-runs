@@ -150,32 +150,24 @@ export default function App() {
   }, [isRunning, startTime])
 
   // ── Team realtime subscription ────────────────────────────────────────────
-  useEffect(() => {
-    // Load existing runners
-    supabase.from('runner_locations').select('*').then(({ data }: { data: TeamRunner[] | null }) => {
-      if (data) setTeamRunners(data as TeamRunner[])
-    })
-
-    // Subscribe to live changes
-    const channel = supabase
+  const channel = supabase
       .channel('runner-locations')
       .on(
-        'postgres_changes',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        'postgres_changes' as any,
         { event: '*', schema: 'public', table: 'runner_locations' },
-        (payload: { eventType: string; new: TeamRunner }) => {
+        (payload: any) => {
+          const newRunner = payload.new as TeamRunner
           setTeamRunners((prev) => {
-            const updated = prev.filter((r) => r.user_id !== (payload.new as TeamRunner).user_id)
+            const updated = prev.filter((r) => r.user_id !== newRunner.user_id)
             if (payload.eventType !== 'DELETE') {
-              updated.push(payload.new as TeamRunner)
+              updated.push(newRunner)
             }
             return updated
           })
         }
       )
       .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [])
 
   // ── Controls ──────────────────────────────────────────────────────────────
   const startRun = useCallback(() => {
