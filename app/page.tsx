@@ -150,7 +150,8 @@ export default function App() {
   }, [isRunning, startTime])
 
   // ── Team realtime subscription ────────────────────────────────────────────
-  const channel = supabase
+  useEffect(() => {
+    const channel = supabase
       .channel('runner-locations')
       .on(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -168,6 +169,11 @@ export default function App() {
         }
       )
       .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   // ── Controls ──────────────────────────────────────────────────────────────
   const startRun = useCallback(() => {
