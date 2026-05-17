@@ -152,7 +152,7 @@ export default function App() {
   // ── Team realtime subscription ────────────────────────────────────────────
   useEffect(() => {
     // Load existing runners
-    supabase.from('runner_locations').select('*').then(({ data }) => {
+    supabase.from('runner_locations').select('*').then(({ data }: { data: TeamRunner[] | null }) => {
       if (data) setTeamRunners(data as TeamRunner[])
     })
 
