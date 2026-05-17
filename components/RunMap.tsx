@@ -32,7 +32,7 @@ export default function RunMap({
   const mapRef = useRef<Map | null>(null)
   const myMarkerRef = useRef<Marker | null>(null)
   const routeLineRef = useRef<Polyline | null>(null)
-  const teamMarkersRef = useRef<Map<string, Marker>>(new Map() as unknown as Map<string, Marker>)
+  const teamMarkersRef = useRef<globalThis.Map<string, Marker>>(new globalThis.Map())
 
   // Initialize map once
   useEffect(() => {
