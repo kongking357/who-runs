@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export const supabase = createClient(
   'https://imloiwqyrlcodhlkrjrt.supabase.co',
-  'sb_publishable_6HQYzrc0605XTpwff-RWYQ_d6BpSHdF'
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltbG9pd3F5cmxjb2RobGtyanJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMjIwOTcsImV4cCI6MjA5NDU5ODA5N30.jB9Hs5drFaRU47KE6lmEmGN5Z73sne5vi8HL1h3UvSs'
 )
 
 export type RunnerLocation = {
