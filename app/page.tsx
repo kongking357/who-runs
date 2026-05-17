@@ -162,7 +162,7 @@ export default function App() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'runner_locations' },
-        (payload) => {
+        (payload: { eventType: string; new: TeamRunner }) => {
           setTeamRunners((prev) => {
             const updated = prev.filter((r) => r.user_id !== (payload.new as TeamRunner).user_id)
             if (payload.eventType !== 'DELETE') {
