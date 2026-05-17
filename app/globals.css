@@ -1,0 +1,38 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap');
+@import 'leaflet/dist/leaflet.css';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #04070b;
+  --panel: rgba(10,14,20,0.92);
+  --line: rgba(255,255,255,0.07);
+  --text: #eef6ff;
+  --muted: rgba(223,234,246,0.42);
+  --cyan: #00d8ff;
+  --cyan-soft: rgba(0,216,255,0.12);
+  --green: #59ffad;
+  --red: #ff5a67;
+  --font-display: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  overflow: hidden;
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+  background: #07111a;
+}
+.leaflet-control-attribution {
+  display: none !important;
+}
