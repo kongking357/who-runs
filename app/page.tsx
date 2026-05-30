@@ -540,7 +540,17 @@ export default function App() {
 
 // ─── Post Screen (original WHO RUNS design) ───────────────────────────────────
 
-function PostScreen({ stats, onConfirm, onDiscard }: { stats: RunStats; onConfirm: () => void; onDiscard: () => void }) {
+function PostScreen({
+  stats,
+  onConfirm,
+  onDiscard,
+  showActions = true,
+}: {
+  stats: RunStats
+  onConfirm?: () => void
+  onDiscard?: () => void
+  showActions?: boolean
+}) {
   return (
     <div className="post">
       <div className="wordmark">W H O &nbsp; R U N S</div>
@@ -561,7 +571,7 @@ function PostScreen({ stats, onConfirm, onDiscard }: { stats: RunStats; onConfir
         <Big value="×2.25" label="BOOST" />
       </div>
 
-      <div className="actions">
+      {showActions && <div className="actions">
         <button className="act confirm" onClick={onConfirm}>
           <span className="act-icon">✓</span>
           <span className="act-label">SAVE RUN</span>
@@ -570,7 +580,7 @@ function PostScreen({ stats, onConfirm, onDiscard }: { stats: RunStats; onConfir
           <span className="act-icon">✕</span>
           <span className="act-label">DISCARD</span>
         </button>
-      </div>
+      </div>}
 
       <style jsx>{`
         .post {
@@ -654,23 +664,24 @@ function RunSummary({ stats, route, label, date, onBack }: RunSummaryProps) {
       </div>
 
       <div className="spanel">
+        <div className="wordmark">W H O &nbsp; R U N S</div>
         <div className="sdate-row">
           <span className="srun-label">{label}</span>
           <span className="stime">{displayTime}</span>
         </div>
 
         <div className="sprimary">
-          <div className="sblock"><div className="sbig">{stats.distanceKm.toFixed(2)}</div><div className="slabel">KILOMETERS</div></div>
+          <div className="sblock"><div className="sbig">{stats.distanceKm.toFixed(2)}</div><div className="slabel">KM</div></div>
           <div className="svline" />
           <div className="sblock"><div className="sbig">{formatTime(stats.durationSec)}</div><div className="slabel">DURATION</div></div>
           <div className="svline" />
-          <div className="sblock"><div className="sbig">{formatPace(stats.pace)}</div><div className="slabel">PACE /KM</div></div>
+          <div className="sblock"><div className="sbig">{formatPace(stats.pace)}</div><div className="slabel">PACE</div></div>
         </div>
 
         <div className="shline" />
 
         <div className="ssecondary">
-          <div className="sblock2"><div className={`sbig2 ${stats.sqm > 0 ? 'cyan' : ''}`}>{stats.sqm > 0 ? (stats.sqm >= 1000 ? `${(stats.sqm / 1000).toFixed(1)}k` : String(Math.round(stats.sqm))) : '—'}</div><div className="slabel">SQM CAPTURED</div></div>
+          <div className="sblock2"><div className={`sbig2 ${stats.sqm > 0 ? 'cyan' : ''}`}>{stats.sqm > 0 ? (stats.sqm >= 1000 ? `${(stats.sqm / 1000).toFixed(1)}k` : String(Math.round(stats.sqm))) : '—'}</div><div className="slabel">SQM</div></div>
           <div className="svline" />
           <div className="sblock2"><div className={`sbig2 ${pts > 0 ? 'green' : ''}`}>{pts > 0 ? pts.toLocaleString() : '—'}</div><div className="slabel">POINTS</div></div>
           <div className="svline" />
@@ -694,22 +705,37 @@ function RunSummary({ stats, route, label, date, onBack }: RunSummaryProps) {
           color:var(--cyan); font-size:10px; letter-spacing:.16em;
           padding:7px 14px; border-radius:4px; cursor:pointer; backdrop-filter:blur(12px);
         }
-        .spanel { flex-shrink:0; background:var(--panel); border-top:1px solid var(--line); backdrop-filter:blur(20px); }
+        .spanel {
+          flex-shrink:0;
+          background:linear-gradient(to bottom,transparent 0%,rgba(10,13,18,.97) 16%,#0a0d12 100%);
+          border-top:1px solid var(--line);
+          backdrop-filter:blur(20px);
+          padding-top:52px;
+        }
+        .wordmark {
+          text-align:center; font-size:9px; font-weight:600;
+          letter-spacing:.55em; color:var(--cyan); margin-bottom:24px;
+          display:flex; align-items:center; justify-content:center; gap:10px;
+        }
+        .wordmark::before,.wordmark::after {
+          content:''; flex:1; max-width:48px; height:1px;
+          background:var(--cyan); opacity:.35;
+        }
         .sdate-row { display:flex; align-items:center; justify-content:space-between; padding:12px 20px 10px; border-bottom:1px solid var(--line); }
         .srun-label { font-size:13px; font-weight:500; letter-spacing:.04em; color:var(--text); }
         .stime { font-size:10px; color:var(--muted); letter-spacing:.08em; }
         .sprimary { display:flex; align-items:stretch; }
         .sblock { flex:1; display:flex; flex-direction:column; align-items:flex-start; padding:14px 0 12px 18px; }
-        .sbig { font-size:28px; font-weight:300; letter-spacing:.02em; color:var(--text); line-height:1; margin-bottom:5px; }
-        .slabel { font-size:7px; font-weight:600; letter-spacing:.28em; color:var(--muted); text-transform:uppercase; }
+        .sbig { font-size:32px; font-weight:300; letter-spacing:.02em; color:var(--text); line-height:1; margin-bottom:5px; }
+        .slabel { font-size:8px; font-weight:500; letter-spacing:.28em; color:var(--muted); text-transform:uppercase; }
         .svline { width:1px; background:var(--line); flex-shrink:0; }
         .shline { height:1px; background:var(--line); }
         .ssecondary { display:flex; align-items:stretch; }
         .sblock2 { flex:1; display:flex; flex-direction:column; align-items:flex-start; padding:12px 0 12px 18px; }
-        .sbig2 { font-size:22px; font-weight:300; letter-spacing:.02em; color:var(--text); line-height:1; margin-bottom:5px; }
+        .sbig2 { font-size:32px; font-weight:300; letter-spacing:.02em; color:var(--text); line-height:1; margin-bottom:5px; }
         .sbig2.cyan { color:var(--cyan); }
         .sbig2.green { color:var(--green); }
-        .sactions { display:flex; align-items:stretch; min-height:56px; }
+        .sactions { display:none; }
         .sact { flex:1; display:flex; align-items:center; justify-content:center; background:none; border:none; cursor:pointer; transition:.15s; }
         .sact-label { font-size:9px; letter-spacing:.28em; color:var(--muted); }
         .sact:hover .sact-label { color:var(--cyan); }

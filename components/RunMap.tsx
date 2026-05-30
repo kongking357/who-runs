@@ -40,6 +40,7 @@ export default function RunMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<Map | null>(null)
   const myMarkerRef = useRef<Marker | null>(null)
+  const routeGlowRef = useRef<Polyline | null>(null)
   const routeLineRef = useRef<Polyline | null>(null)
   const teamMarkersRef = useRef<globalThis.Map<string, Marker>>(new globalThis.Map())
   const polygonLayersRef = useRef<Polygon[]>([])
@@ -102,16 +103,34 @@ export default function RunMap({
     if (!mapRef.current) return
     const L = require('leaflet')
     if (route.length < 2) {
+      if (routeGlowRef.current) { routeGlowRef.current.remove(); routeGlowRef.current = null }
       if (routeLineRef.current) { routeLineRef.current.remove(); routeLineRef.current = null }
       return
     }
     const coords = route.map((p) => [p.lat, p.lng] as [number, number])
+    if (routeGlowRef.current) {
+      routeGlowRef.current.setLatLngs(coords)
+    } else {
+      routeGlowRef.current = L.polyline(coords, {
+        color: '#00c8f0',
+        weight: 12,
+        opacity: 1,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(mapRef.current)
+      routeGlowRef.current.getElement()?.classList.add('run-route-glow')
+    }
     if (routeLineRef.current) {
       routeLineRef.current.setLatLngs(coords)
     } else {
       routeLineRef.current = L.polyline(coords, {
-        color: '#00c8f0', weight: 2.5, opacity: 0.9,
+        color: '#7df2ff',
+        weight: 3.5,
+        opacity: 1,
+        lineCap: 'round',
+        lineJoin: 'round',
       }).addTo(mapRef.current)
+      routeLineRef.current.getElement()?.classList.add('run-route-core')
     }
   }, [route])
 
@@ -165,9 +184,23 @@ export default function RunMap({
   }, [teamRunners])
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: "100%", height: "100%", position: "relative", zIndex: 0 }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        style={{ width: "100%", height: "100%", position: "relative", zIndex: 0 }}
+      />
+      <style jsx global>{`
+        .run-route-glow {
+          filter: drop-shadow(0 0 10px rgba(0, 200, 240, 1)) drop-shadow(0 0 24px rgba(0, 200, 240, .92));
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+        .run-route-core {
+          filter: drop-shadow(0 0 8px rgba(125, 242, 255, 1));
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+      `}</style>
+    </>
   )
 }
