@@ -112,9 +112,9 @@ export default function RunMap({
       routeGlowRef.current.setLatLngs(coords)
     } else {
       routeGlowRef.current = L.polyline(coords, {
-        color: '#00c8f0',
-        weight: 24,
-        opacity: 1,
+        color: '#00bff5',
+        weight: 18,
+        opacity: 0.72,
         lineCap: 'round',
         lineJoin: 'round',
         className: 'run-route-glow',
@@ -124,8 +124,8 @@ export default function RunMap({
       routeLineRef.current.setLatLngs(coords)
     } else {
       routeLineRef.current = L.polyline(coords, {
-        color: '#b9fbff',
-        weight: 6,
+        color: '#14d9ff',
+        weight: 4.5,
         opacity: 1,
         lineCap: 'round',
         lineJoin: 'round',
@@ -146,11 +146,14 @@ export default function RunMap({
     closedPolygons.forEach(({ points }) => {
       const coords = points.map((p) => [p.lat, p.lng] as [number, number])
       const poly = L.polygon(coords, {
-        color: '#00c8f0',
-        weight: 2,
-        opacity: 0.9,
-        fillColor: '#00c8f0',
-        fillOpacity: loopFlash ? 0.35 : 0.15,
+        color: '#14d9ff',
+        weight: 4,
+        opacity: 1,
+        fillColor: '#00bff5',
+        fillOpacity: loopFlash ? 0.2 : 0.1,
+        lineCap: 'round',
+        lineJoin: 'round',
+        className: 'run-polygon-glow',
       }).addTo(mapRef.current!)
       polygonLayersRef.current.push(poly)
     })
@@ -191,34 +194,45 @@ export default function RunMap({
       />
       <style jsx global>{`
         .run-route-glow {
-          animation: runRoutePulse 1.15s ease-in-out infinite;
-          filter: drop-shadow(0 0 14px rgba(0, 220, 255, 1)) drop-shadow(0 0 34px rgba(0, 200, 240, 1));
-          stroke: #00dfff;
+          animation: runRouteGlowPulse 1.45s ease-in-out infinite;
+          filter:
+            drop-shadow(0 0 6px rgba(20, 217, 255, .95))
+            drop-shadow(0 0 18px rgba(0, 191, 245, .8))
+            drop-shadow(0 0 42px rgba(0, 160, 240, .55));
+          stroke: #00bff5;
           stroke-linecap: round;
           stroke-linejoin: round;
         }
         .run-route-core {
-          animation: runRouteCorePulse 1.15s ease-in-out infinite;
-          filter: drop-shadow(0 0 10px rgba(185, 251, 255, 1)) drop-shadow(0 0 18px rgba(0, 220, 255, .95));
-          stroke: #b9fbff;
+          animation: runRouteCorePulse 1.45s ease-in-out infinite;
+          filter:
+            drop-shadow(0 0 4px rgba(255, 255, 255, .85))
+            drop-shadow(0 0 12px rgba(20, 217, 255, 1))
+            drop-shadow(0 0 26px rgba(0, 191, 245, .9));
+          stroke: #14d9ff;
           stroke-linecap: round;
           stroke-linejoin: round;
         }
-        @keyframes runRoutePulse {
+        .run-polygon-glow {
+          animation: runRouteCorePulse 1.45s ease-in-out infinite;
+          filter:
+            drop-shadow(0 0 8px rgba(20, 217, 255, .95))
+            drop-shadow(0 0 22px rgba(0, 191, 245, .75))
+            drop-shadow(0 0 46px rgba(0, 160, 240, .45));
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+        @keyframes runRouteGlowPulse {
           0%, 100% {
-            opacity: .7;
-            stroke-width: 16px;
-            filter: drop-shadow(0 0 12px rgba(0, 220, 255, .9)) drop-shadow(0 0 28px rgba(0, 200, 240, .9));
+            opacity: .46;
           }
           50% {
-            opacity: 1;
-            stroke-width: 28px;
-            filter: drop-shadow(0 0 20px rgba(0, 240, 255, 1)) drop-shadow(0 0 48px rgba(0, 200, 240, 1));
+            opacity: .9;
           }
         }
         @keyframes runRouteCorePulse {
-          0%, 100% { stroke-width: 5px; opacity: .95; }
-          50% { stroke-width: 8px; opacity: 1; }
+          0%, 100% { opacity: .86; }
+          50% { opacity: 1; }
         }
       `}</style>
     </>
