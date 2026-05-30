@@ -290,9 +290,9 @@ export default function App() {
       )}
 
       <style jsx>{`
-        .shell { position:fixed; inset:0; background:var(--bg); }
+        .shell { position:fixed; inset:0; background:var(--bg); isolation:isolate; }
         .screen { position:relative; width:100%; height:100%; overflow:hidden; }
-        .map-fill { position:absolute; inset:0; }
+        .map-fill { position:absolute; inset:0; z-index:0; }
         .gps-err {
           position:fixed; top:0; left:0; right:0; z-index:999;
           background:var(--red); color:#fff; text-align:center;

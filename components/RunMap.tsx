@@ -58,7 +58,7 @@ export default function RunMap({
     }).setView(center, zoom)
 
     // Light map tile
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
     }).addTo(map)
 
@@ -167,7 +167,7 @@ export default function RunMap({
   return (
     <div
       ref={containerRef}
-      style={{ width: '100%', height: '100%' }}
+      style={{ width: "100%", height: "100%", position: "relative", zIndex: 0 }}
     />
   )
 }

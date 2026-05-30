@@ -34,3 +34,13 @@ html, body {
 .leaflet-container { background: #dde2e8; }
 .leaflet-control-attribution { display: none !important; }
 .leaflet-control-zoom { display: none !important; }
+
+/* Keep Leaflet below app UI — all app chrome sits above z:10 */
+.leaflet-pane { z-index: 1 !important; }
+.leaflet-tile-pane { z-index: 1 !important; }
+.leaflet-overlay-pane { z-index: 2 !important; }
+.leaflet-marker-pane { z-index: 3 !important; }
+.leaflet-top, .leaflet-bottom { z-index: 4 !important; }
+
+/* Dark map — subtle, not oppressive */
+.leaflet-tile { filter: brightness(0.82) contrast(1.05) saturate(0.85); }
