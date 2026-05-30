@@ -99,6 +99,7 @@ export default function App() {
   const startTimeRef = useRef<number | null>(null)
   const routeRef = useRef<GPSPoint[]>([])
   const totalSqmRef = useRef(0)
+  const totalDistKmRef = useRef(0)   // always current distance
   const lastClosedRef = useRef(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const watchIdRef = useRef<number | null>(null)
@@ -127,6 +128,7 @@ export default function App() {
         for (let i = 1; i < updated.length; i++) totalKm += distanceKm(updated[i - 1], updated[i])
 
         const durSec = startTimeRef.current ? (Date.now() - startTimeRef.current) / 1000 : 0
+        totalDistKmRef.current = totalKm
         // pace in sec/km — only meaningful once we have real distance
         const pace = totalKm > 0.01 ? durSec / totalKm : 0
 
@@ -202,6 +204,7 @@ export default function App() {
     routeRef.current = []
     closedPolygonsRef.current = []
     totalSqmRef.current = 0
+    totalDistKmRef.current = 0
     lastClosedRef.current = false
     startTimeRef.current = now
     isRunningRef.current = true
@@ -214,24 +217,34 @@ export default function App() {
     setScreen('running')
   }, [])
 
-  const stopRun = useCallback(async () => {
+  const stopRun = useCallback(() => {
     isRunningRef.current = false
-    const currentStats = { ...stats }
-    setFinalStats(currentStats)
+    const now = Date.now()
+    const durSec = startTimeRef.current ? (now - startTimeRef.current) / 1000 : 0
+    const distKm = totalDistKmRef.current
+    const sqm = totalSqmRef.current
+    const pace = distKm > 0.01 ? durSec / distKm : 0
+    const snapped: RunStats = { distanceKm: distKm, durationSec: durSec, pace, sqm }
+    setFinalStats(snapped)
     setScreen('post')
-  }, [stats])
+  }, [])
 
   const confirmSave = useCallback(async () => {
     const s = finalStats
     const start = startTimeRef.current
-    if (s && routeRef.current.length > 1 && start) {
-      await supabase.from('run_sessions').insert({
-        user_id: userId, team_id: null,
-        distance_km: s.distanceKm, duration_seconds: s.durationSec,
-        pace_per_km: s.pace, sqm_covered: s.sqm,
-        started_at: new Date(start).toISOString(), ended_at: new Date().toISOString(),
+    if (s && start) {
+      const { error } = await supabase.from('run_sessions').insert({
+        user_id: userId,
+        team_id: null,
+        distance_km: s.distanceKm,
+        duration_seconds: Math.round(s.durationSec),
+        pace_per_km: s.pace,
+        sqm_covered: s.sqm,
+        started_at: new Date(start).toISOString(),
+        ended_at: new Date().toISOString(),
         route: routeRef.current.map((p) => [p.lat, p.lng]),
       })
+      if (error) console.error('Save error:', error)
     }
     await supabase.from('runner_locations').delete().eq('user_id', userId)
     setScreen('idle')
