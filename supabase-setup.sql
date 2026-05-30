@@ -23,6 +23,7 @@ create table if not exists run_sessions (
   duration_seconds integer not null default 0,
   pace_per_km double precision not null default 0,
   sqm_covered integer not null default 0,
+  location_name text,
   route jsonb default '[]',
   started_at timestamptz not null,
   ended_at timestamptz,

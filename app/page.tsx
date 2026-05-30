@@ -746,7 +746,10 @@ function AuthModal({ onClose, onDone }: { onClose: () => void; onDone: () => voi
     if (isSignUp) {
       const { error } = await supabase.auth.signUp({
         email, password,
-        options: { data: { full_name: name } },
+        options: {
+          data: { full_name: name },
+          emailRedirectTo: window.location.origin,
+        },
       })
       if (error) setError(error.message)
       else setMessage('Check your email to confirm your account.')
