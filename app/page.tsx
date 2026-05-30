@@ -589,10 +589,10 @@ function PostScreen({
         .post {
           position:absolute; bottom:0; left:0; right:0; z-index:20;
           background:
-            radial-gradient(circle at 50% 0%, rgba(0, 191, 245, .16), transparent 34%),
-            linear-gradient(to bottom,transparent 0%,rgba(5,8,13,.94) 13%,#05080d 100%);
-          padding-top:58px;
-          box-shadow:0 -28px 70px rgba(0, 191, 245, .12);
+            radial-gradient(circle at 50px 66px, rgba(0, 191, 245, .08), transparent 26%),
+            radial-gradient(circle at calc(100% - 50px) 66px, rgba(0, 191, 245, .08), transparent 26%),
+            #05080d;
+          padding-top:42px;
         }
         .wordmark {
           text-align:center; font-size:9px; font-weight:600;
