@@ -138,6 +138,7 @@ export default function App() {
   const lastClosedRef = useRef(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const watchIdRef = useRef<number | null>(null)
+  const fullRouteRef = useRef<GPSPoint[]>([])
   const closedPolygonsRef = useRef<{ points: GPSPoint[]; sqm: number }[]>([])
   const locationNameRef = useRef<string>('Unknown')
 
@@ -160,19 +161,22 @@ export default function App() {
         setGpsError(null)
         if (!isRunningRef.current) return
 
-        const updated = [...routeRef.current, pt]
-        routeRef.current = updated
+        const activeUpdated = [...routeRef.current, pt]
+        routeRef.current = activeUpdated
 
-        let totalKm = 0
-        for (let i = 1; i < updated.length; i++) totalKm += distanceKm(updated[i - 1], updated[i])
+        const previousFullPoint = fullRouteRef.current[fullRouteRef.current.length - 1]
+        if (previousFullPoint) totalDistKmRef.current += distanceKm(previousFullPoint, pt)
+        const fullUpdated = [...fullRouteRef.current, pt]
+        fullRouteRef.current = fullUpdated
+
+        const totalKm = totalDistKmRef.current
         const durSec = startTimeRef.current ? (Date.now() - startTimeRef.current) / 1000 : 0
-        totalDistKmRef.current = totalKm
         const pace = totalKm > 0.01 ? durSec / totalKm : 0
 
-        const { sqm, closed } = computeClosedArea(updated)
+        const { sqm, closed } = computeClosedArea(activeUpdated)
         if (closed && !lastClosedRef.current) {
           lastClosedRef.current = true
-          const newPolygon = { points: [...updated], sqm }
+          const newPolygon = { points: [...activeUpdated], sqm }
           closedPolygonsRef.current = [...closedPolygonsRef.current, newPolygon]
           setClosedPolygons(closedPolygonsRef.current)
           const newTotal = totalSqmRef.current + sqm
@@ -180,12 +184,12 @@ export default function App() {
           setLoopJustClosed(true)
           setTimeout(() => setLoopJustClosed(false), 1800)
           routeRef.current = [pt]
-          setRoute([pt])
+          setRoute(fullUpdated)
           setStats({ distanceKm: totalKm, durationSec: durSec, pace, sqm: newTotal })
           return
         }
         if (!closed) lastClosedRef.current = false
-        setRoute([...updated])
+        setRoute(fullUpdated)
         setStats({ distanceKm: totalKm, durationSec: durSec, pace, sqm: totalSqmRef.current })
 
         supabase.from('runner_locations').upsert({
@@ -227,6 +231,7 @@ export default function App() {
 
   const startRun = useCallback(() => {
     routeRef.current = []
+    fullRouteRef.current = []
     closedPolygonsRef.current = []
     totalSqmRef.current = 0
     totalDistKmRef.current = 0
@@ -272,7 +277,7 @@ export default function App() {
         location_name: locationNameRef.current,
         started_at: new Date(start).toISOString(),
         ended_at: new Date().toISOString(),
-        route: routeRef.current.map((p) => [p.lat, p.lng]),
+        route: fullRouteRef.current.map((p) => [p.lat, p.lng]),
       })
       if (error) console.error('Save error:', error)
     }
@@ -309,8 +314,6 @@ export default function App() {
   }, [loadHistory])
 
   const mapCenter: [number, number] | null = position ? [position.lat, position.lng] : null
-  const liveRoutePairs: [number, number][] = routeRef.current.map(p => [p.lat, p.lng])
-
   if (!authReady) return null
 
   return (
@@ -663,6 +666,8 @@ function RunSummary({ stats, route, label, date, onBack }: RunSummaryProps) {
         <button className="back-btn" onClick={onBack}>‹ RUNS</button>
       </div>
 
+      <PostScreen stats={stats} showActions={false} />
+
       <div className="spanel">
         <div className="wordmark">W H O &nbsp; R U N S</div>
         <div className="sdate-row">
@@ -706,6 +711,7 @@ function RunSummary({ stats, route, label, date, onBack }: RunSummaryProps) {
           padding:7px 14px; border-radius:4px; cursor:pointer; backdrop-filter:blur(12px);
         }
         .spanel {
+          display:none;
           flex-shrink:0;
           background:linear-gradient(to bottom,transparent 0%,rgba(10,13,18,.97) 16%,#0a0d12 100%);
           border-top:1px solid var(--line);

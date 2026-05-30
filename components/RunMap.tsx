@@ -113,24 +113,24 @@ export default function RunMap({
     } else {
       routeGlowRef.current = L.polyline(coords, {
         color: '#00c8f0',
-        weight: 12,
+        weight: 24,
         opacity: 1,
         lineCap: 'round',
         lineJoin: 'round',
+        className: 'run-route-glow',
       }).addTo(mapRef.current)
-      routeGlowRef.current.getElement()?.classList.add('run-route-glow')
     }
     if (routeLineRef.current) {
       routeLineRef.current.setLatLngs(coords)
     } else {
       routeLineRef.current = L.polyline(coords, {
-        color: '#7df2ff',
-        weight: 3.5,
+        color: '#b9fbff',
+        weight: 6,
         opacity: 1,
         lineCap: 'round',
         lineJoin: 'round',
+        className: 'run-route-core',
       }).addTo(mapRef.current)
-      routeLineRef.current.getElement()?.classList.add('run-route-core')
     }
   }, [route])
 
@@ -191,14 +191,34 @@ export default function RunMap({
       />
       <style jsx global>{`
         .run-route-glow {
-          filter: drop-shadow(0 0 10px rgba(0, 200, 240, 1)) drop-shadow(0 0 24px rgba(0, 200, 240, .92));
+          animation: runRoutePulse 1.15s ease-in-out infinite;
+          filter: drop-shadow(0 0 14px rgba(0, 220, 255, 1)) drop-shadow(0 0 34px rgba(0, 200, 240, 1));
+          stroke: #00dfff;
           stroke-linecap: round;
           stroke-linejoin: round;
         }
         .run-route-core {
-          filter: drop-shadow(0 0 8px rgba(125, 242, 255, 1));
+          animation: runRouteCorePulse 1.15s ease-in-out infinite;
+          filter: drop-shadow(0 0 10px rgba(185, 251, 255, 1)) drop-shadow(0 0 18px rgba(0, 220, 255, .95));
+          stroke: #b9fbff;
           stroke-linecap: round;
           stroke-linejoin: round;
+        }
+        @keyframes runRoutePulse {
+          0%, 100% {
+            opacity: .7;
+            stroke-width: 16px;
+            filter: drop-shadow(0 0 12px rgba(0, 220, 255, .9)) drop-shadow(0 0 28px rgba(0, 200, 240, .9));
+          }
+          50% {
+            opacity: 1;
+            stroke-width: 28px;
+            filter: drop-shadow(0 0 20px rgba(0, 240, 255, 1)) drop-shadow(0 0 48px rgba(0, 200, 240, 1));
+          }
+        }
+        @keyframes runRouteCorePulse {
+          0%, 100% { stroke-width: 5px; opacity: .95; }
+          50% { stroke-width: 8px; opacity: 1; }
         }
       `}</style>
     </>
