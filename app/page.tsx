@@ -7,13 +7,22 @@ import { distanceKm, formatPace, formatTime, GPSPoint } from '@/lib/gps'
 
 const RunMap = dynamic(() => import('@/components/RunMap'), { ssr: false })
 
-type Screen = 'idle' | 'running' | 'post'
+type Screen = 'idle' | 'running' | 'post' | 'history'
 
 interface RunStats {
   distanceKm: number
   durationSec: number
-  pace: number
+  pace: number   // sec/km
   sqm: number
+}
+
+interface SavedRun {
+  id: string
+  started_at: string
+  distance_km: number
+  duration_seconds: number
+  pace_per_km: number
+  sqm_covered: number
 }
 
 interface TeamRunner {
@@ -46,23 +55,17 @@ function generateDisplayName() {
   return name
 }
 
-// Shoelace formula — real polygon area in m²
-// Only fires when route forms a closed loop (start ↔ end within closeThresholdM)
 const CLOSE_THRESHOLD_M = 50
 
 function computeClosedArea(points: GPSPoint[]): { sqm: number; closed: boolean } {
   if (points.length < 6) return { sqm: 0, closed: false }
-
   const first = points[0]
   const last = points[points.length - 1]
   const closingM = distanceKm(first, last) * 1000
-
   if (closingM > CLOSE_THRESHOLD_M) return { sqm: 0, closed: false }
-
   const avgLat = points.reduce((s, p) => s + p.lat, 0) / points.length
   const mLat = 111320
   const mLng = 111320 * Math.cos((avgLat * Math.PI) / 180)
-
   let area = 0
   for (let i = 0; i < points.length; i++) {
     const j = (i + 1) % points.length
@@ -74,7 +77,7 @@ function computeClosedArea(points: GPSPoint[]): { sqm: number; closed: boolean }
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('idle')
-  const [activeTab, setActiveTab] = useState<'me' | 'team'>('me')
+  const [activeTab, setActiveTab] = useState<'me' | 'team' | 'history'>('me')
   const [userId] = useState(generateUserId)
   const [displayName] = useState(generateDisplayName)
 
@@ -85,18 +88,25 @@ export default function App() {
   const [totalSqm, setTotalSqm] = useState(0)
   const [loopJustClosed, setLoopJustClosed] = useState(false)
 
-  const [isRunning, setIsRunning] = useState(false)
-  const [startTime, setStartTime] = useState<number | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [stats, setStats] = useState<RunStats>({ distanceKm: 0, durationSec: 0, pace: 0, sqm: 0 })
   const [finalStats, setFinalStats] = useState<RunStats | null>(null)
+  const [savedRuns, setSavedRuns] = useState<SavedRun[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
+  // Use refs for values needed inside the GPS callback to avoid stale closures
+  const isRunningRef = useRef(false)
+  const startTimeRef = useRef<number | null>(null)
+  const routeRef = useRef<GPSPoint[]>([])
+  const totalSqmRef = useRef(0)
+  const lastClosedRef = useRef(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const watchIdRef = useRef<number | null>(null)
-  const lastClosedRef = useRef(false)
+  const closedPolygonsRef = useRef<{ points: GPSPoint[]; sqm: number }[]>([])
 
   const [teamRunners, setTeamRunners] = useState<TeamRunner[]>([])
 
-  // GPS watch — always on so idle screen also follows position
+  // GPS watch — always on
   useEffect(() => {
     if (!navigator.geolocation) { setGpsError('GPS not available'); return }
 
@@ -106,39 +116,45 @@ export default function App() {
         setPosition(pt)
         setGpsError(null)
 
-        if (!isRunning) return
+        if (!isRunningRef.current) return
 
-        setRoute((prev) => {
-          const updated = [...prev, pt]
+        const prev = routeRef.current
+        const updated = [...prev, pt]
+        routeRef.current = updated
 
-          // Distance
-          let totalKm = 0
-          for (let i = 1; i < updated.length; i++) totalKm += distanceKm(updated[i - 1], updated[i])
+        // Compute distance from full updated route
+        let totalKm = 0
+        for (let i = 1; i < updated.length; i++) totalKm += distanceKm(updated[i - 1], updated[i])
 
-          const durSec = startTime ? (Date.now() - startTime) / 1000 : 0
-          const pace = totalKm > 0 ? durSec / totalKm : 0
+        const durSec = startTimeRef.current ? (Date.now() - startTimeRef.current) / 1000 : 0
+        // pace in sec/km — only meaningful once we have real distance
+        const pace = totalKm > 0.01 ? durSec / totalKm : 0
 
-          // Check if loop just closed
-          const { sqm, closed } = computeClosedArea(updated)
-          if (closed && !lastClosedRef.current) {
-            lastClosedRef.current = true
-            setLoopJustClosed(true)
-            setClosedPolygons((p) => [...p, { points: [...updated], sqm }])
-            setTotalSqm((t) => {
-              const next = t + sqm
-              setStats({ distanceKm: totalKm, durationSec: durSec, pace, sqm: next })
-              return next
-            })
-            setTimeout(() => setLoopJustClosed(false), 1800)
-            // Reset route to continue from current point
-            return [pt]
-          }
+        // Check loop closure
+        const { sqm, closed } = computeClosedArea(updated)
+        if (closed && !lastClosedRef.current) {
+          lastClosedRef.current = true
+          const newPolygon = { points: [...updated], sqm }
+          closedPolygonsRef.current = [...closedPolygonsRef.current, newPolygon]
+          setClosedPolygons(closedPolygonsRef.current)
 
-          if (!closed) lastClosedRef.current = false
+          const newTotal = totalSqmRef.current + sqm
+          totalSqmRef.current = newTotal
+          setTotalSqm(newTotal)
+          setLoopJustClosed(true)
+          setTimeout(() => setLoopJustClosed(false), 1800)
 
-          setStats((s) => ({ ...s, distanceKm: totalKm, durationSec: durSec, pace, sqm: s.sqm }))
-          return updated
-        })
+          // reset route for next loop
+          routeRef.current = [pt]
+          setRoute([pt])
+          setStats({ distanceKm: totalKm, durationSec: durSec, pace, sqm: newTotal })
+          return
+        }
+
+        if (!closed) lastClosedRef.current = false
+
+        setRoute([...updated])
+        setStats({ distanceKm: totalKm, durationSec: durSec, pace, sqm: totalSqmRef.current })
 
         supabase.from('runner_locations').upsert({
           user_id: userId, team_id: null, display_name: displayName,
@@ -149,21 +165,24 @@ export default function App() {
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
     )
 
-    return () => { if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current) }
-  }, [isRunning, userId, displayName, startTime])
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, displayName])
 
-  // Timer
+  // Timer — ticks every second while running
   useEffect(() => {
-    if (isRunning) {
-      timerRef.current = setInterval(
-        () => setElapsed(startTime ? Math.floor((Date.now() - startTime) / 1000) : 0),
-        1000
-      )
+    if (screen === 'running') {
+      timerRef.current = setInterval(() => {
+        const start = startTimeRef.current
+        setElapsed(start ? Math.floor((Date.now() - start) / 1000) : 0)
+      }, 1000)
     } else {
       if (timerRef.current) clearInterval(timerRef.current)
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [isRunning, startTime])
+  }, [screen])
 
   // Realtime team
   useEffect(() => {
@@ -179,32 +198,72 @@ export default function App() {
   }, [])
 
   const startRun = useCallback(() => {
+    const now = Date.now()
+    routeRef.current = []
+    closedPolygonsRef.current = []
+    totalSqmRef.current = 0
+    lastClosedRef.current = false
+    startTimeRef.current = now
+    isRunningRef.current = true
+
     setRoute([])
     setClosedPolygons([])
     setTotalSqm(0)
     setElapsed(0)
-    lastClosedRef.current = false
     setStats({ distanceKm: 0, durationSec: 0, pace: 0, sqm: 0 })
-    setStartTime(Date.now())
-    setIsRunning(true)
     setScreen('running')
   }, [])
 
   const stopRun = useCallback(async () => {
-    setIsRunning(false)
-    setFinalStats({ ...stats })
+    isRunningRef.current = false
+    const currentStats = { ...stats }
+    setFinalStats(currentStats)
     setScreen('post')
-    if (route.length > 1) {
+  }, [stats])
+
+  const confirmSave = useCallback(async () => {
+    const s = finalStats
+    const start = startTimeRef.current
+    if (s && routeRef.current.length > 1 && start) {
       await supabase.from('run_sessions').insert({
         user_id: userId, team_id: null,
-        distance_km: stats.distanceKm, duration_seconds: stats.durationSec,
-        pace_per_km: stats.pace, sqm_covered: stats.sqm,
-        started_at: new Date(startTime!).toISOString(), ended_at: new Date().toISOString(),
-        route: route.map((p) => [p.lat, p.lng]),
+        distance_km: s.distanceKm, duration_seconds: s.durationSec,
+        pace_per_km: s.pace, sqm_covered: s.sqm,
+        started_at: new Date(start).toISOString(), ended_at: new Date().toISOString(),
+        route: routeRef.current.map((p) => [p.lat, p.lng]),
       })
     }
     await supabase.from('runner_locations').delete().eq('user_id', userId)
-  }, [stats, route, userId, startTime])
+    setScreen('idle')
+    setActiveTab('me')
+    setStats({ distanceKm: 0, durationSec: 0, pace: 0, sqm: 0 })
+    setElapsed(0)
+  }, [finalStats, userId])
+
+  const discardRun = useCallback(async () => {
+    await supabase.from('runner_locations').delete().eq('user_id', userId)
+    setScreen('idle')
+    setActiveTab('me')
+    setStats({ distanceKm: 0, durationSec: 0, pace: 0, sqm: 0 })
+    setElapsed(0)
+  }, [userId])
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true)
+    const { data } = await supabase
+      .from('run_sessions')
+      .select('id, started_at, distance_km, duration_seconds, pace_per_km, sqm_covered')
+      .eq('user_id', userId)
+      .order('started_at', { ascending: false })
+      .limit(50)
+    setSavedRuns((data as SavedRun[]) || [])
+    setHistoryLoading(false)
+  }, [userId])
+
+  const handleTabChange = useCallback((t: 'me' | 'team' | 'history') => {
+    setActiveTab(t)
+    if (t === 'history') loadHistory()
+  }, [loadHistory])
 
   const mapCenter: [number, number] | null = position ? [position.lat, position.lng] : null
 
@@ -220,9 +279,14 @@ export default function App() {
               ? <RunMap center={mapCenter} myPosition={position} route={[]} teamRunners={[]} zoom={16} followUser closedPolygons={[]} />
               : <Acquiring />}
           </div>
-          <TopBar><Stat label="KM" value="—" /><Stat label="PACE" value="—" /><Stat label="TIME" value="—" /><Stat label="SQM" value="—" /></TopBar>
+          <TopBar>
+            <Stat label="KM" value="—" />
+            <Stat label="PACE" value="—" />
+            <Stat label="TIME" value="—" />
+            <Stat label="SQM" value="—" />
+          </TopBar>
           <StartButton onStart={startRun} hasGps={!!position} />
-          <BottomBar activeTab={activeTab} onTabChange={setActiveTab} />
+          <BottomBar activeTab={activeTab} onTabChange={handleTabChange} />
         </div>
       )}
 
@@ -235,10 +299,10 @@ export default function App() {
             )}
           </div>
           <TopBar>
-            <Stat label="KM" value={stats.distanceKm.toFixed(2)} accent />
+            <Stat label="KM" value={stats.distanceKm > 0 ? stats.distanceKm.toFixed(2) : '0.00'} accent />
             <Stat label="PACE" value={formatPace(stats.pace)} />
             <Stat label="TIME" value={formatTime(elapsed)} />
-            <Stat label="SQM" value={stats.sqm > 0 ? (stats.sqm >= 1000 ? `${(stats.sqm/1000).toFixed(1)}k` : String(stats.sqm)) : '—'} />
+            <Stat label="SQM" value={stats.sqm > 0 ? (stats.sqm >= 1000 ? `${(stats.sqm / 1000).toFixed(1)}k` : String(stats.sqm)) : '—'} />
           </TopBar>
           <div className="elapsed">{formatTime(elapsed)}</div>
           <div className="stop-wrap">
@@ -250,17 +314,17 @@ export default function App() {
       )}
 
       {/* POST */}
-      {screen === 'post' && activeTab === 'me' && finalStats && (
+      {screen === 'post' && finalStats && (
         <div className="screen">
           <div className="map-fill">
             {mapCenter && <RunMap center={mapCenter} myPosition={position} route={route} teamRunners={[]} zoom={15} closedPolygons={closedPolygons} />}
           </div>
-          <PostScreen stats={finalStats} onDone={() => { setScreen('idle'); setStats({ distanceKm:0,durationSec:0,pace:0,sqm:0 }); setElapsed(0) }} />
+          <PostScreen stats={finalStats} onConfirm={confirmSave} onDiscard={discardRun} />
         </div>
       )}
 
       {/* TEAM */}
-      {activeTab === 'team' && screen !== 'running' && (
+      {activeTab === 'team' && screen !== 'running' && screen !== 'post' && (
         <div className="screen">
           <div className="map-fill">
             {mapCenter
@@ -280,12 +344,51 @@ export default function App() {
               : teamRunners.map((r) => (
                 <div key={r.user_id} className="runner-row">
                   <span className="rdot" />
-                  <span className="rname">{r.display_name || r.user_id.slice(0,10)}</span>
-                  <span className="rtime">{Math.round((Date.now()-new Date(r.updated_at).getTime())/1000)}s</span>
+                  <span className="rname">{r.display_name || r.user_id.slice(0, 10)}</span>
+                  <span className="rtime">{Math.round((Date.now() - new Date(r.updated_at).getTime()) / 1000)}s ago</span>
                 </div>
               ))}
           </div>
-          <BottomBar activeTab={activeTab} onTabChange={setActiveTab} />
+          <BottomBar activeTab={activeTab} onTabChange={handleTabChange} />
+        </div>
+      )}
+
+      {/* HISTORY */}
+      {activeTab === 'history' && screen !== 'running' && screen !== 'post' && (
+        <div className="screen">
+          <TopBar>
+            <Stat label="RUNS" value={String(savedRuns.length)} accent />
+            <Stat label="TOTAL KM" value={savedRuns.reduce((s, r) => s + r.distance_km, 0).toFixed(1)} />
+            <Stat label="TOTAL SQM" value={(() => { const t = savedRuns.reduce((s, r) => s + (r.sqm_covered || 0), 0); return t >= 1000 ? `${(t/1000).toFixed(1)}k` : String(t) })()} />
+            <Stat label="AVG PACE" value={(() => { const runs = savedRuns.filter(r => r.pace_per_km > 0); if (!runs.length) return '—'; const avg = runs.reduce((s, r) => s + r.pace_per_km, 0) / runs.length; return formatPace(avg) })()} />
+          </TopBar>
+          <div className="history-list">
+            {historyLoading && <p className="sheet-empty">Loading…</p>}
+            {!historyLoading && savedRuns.length === 0 && (
+              <div className="history-empty">
+                <div className="empty-icon">◎</div>
+                <p>No runs saved yet</p>
+                <p className="empty-sub">Complete a run and press ✓ to save it here</p>
+              </div>
+            )}
+            {savedRuns.map((run, i) => (
+              <div key={run.id} className="history-row">
+                <div className="hrow-left">
+                  <span className="hdate">{new Date(run.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  <span className="htime">{new Date(run.started_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div className="hrow-stats">
+                  <span className="hstat"><span className="hval">{run.distance_km.toFixed(2)}</span><span className="hunit">km</span></span>
+                  <span className="hstat"><span className="hval">{formatTime(run.duration_seconds)}</span><span className="hunit">time</span></span>
+                  <span className="hstat"><span className="hval">{formatPace(run.pace_per_km)}</span><span className="hunit">/km</span></span>
+                  {run.sqm_covered > 0 && (
+                    <span className="hstat accent"><span className="hval">{run.sqm_covered >= 1000 ? `${(run.sqm_covered/1000).toFixed(1)}k` : String(run.sqm_covered)}</span><span className="hunit">sqm</span></span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <BottomBar activeTab={activeTab} onTabChange={handleTabChange} />
         </div>
       )}
 
@@ -342,6 +445,33 @@ export default function App() {
         }
         .rname { flex:1; font-size:12px; letter-spacing:.06em; color:var(--text); }
         .rtime { font-size:10px; color:var(--muted); }
+        /* History */
+        .history-list {
+          position:absolute; top:58px; bottom:56px; left:0; right:0;
+          overflow-y:auto; z-index:10;
+        }
+        .history-empty {
+          display:flex; flex-direction:column; align-items:center;
+          justify-content:center; height:100%; gap:10px;
+          color:var(--muted);
+        }
+        .empty-icon { font-size:40px; opacity:.25; margin-bottom:6px; }
+        .history-empty p { font-size:13px; letter-spacing:.06em; }
+        .empty-sub { font-size:10px; letter-spacing:.04em; opacity:.6; }
+        .history-row {
+          display:flex; flex-direction:column; gap:6px;
+          padding:14px 20px; border-bottom:1px solid var(--line);
+        }
+        .history-row:active { background:rgba(255,255,255,.02); }
+        .hrow-left { display:flex; align-items:baseline; gap:8px; }
+        .hdate { font-size:13px; font-weight:500; color:var(--text); letter-spacing:.04em; }
+        .htime { font-size:10px; color:var(--muted); }
+        .hrow-stats { display:flex; gap:16px; flex-wrap:wrap; }
+        .hstat { display:flex; align-items:baseline; gap:3px; }
+        .hval { font-size:15px; font-weight:400; color:var(--text); }
+        .hunit { font-size:8px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase; }
+        .accent .hval { color:var(--cyan); }
+        .accent .hunit { color:var(--cyan); opacity:.55; }
       `}</style>
     </div>
   )
@@ -452,7 +582,7 @@ function StartButton({ onStart, hasGps }: { onStart: () => void; hasGps: boolean
   )
 }
 
-function PostScreen({ stats, onDone }: { stats: RunStats; onDone: () => void }) {
+function PostScreen({ stats, onConfirm, onDiscard }: { stats: RunStats; onConfirm: () => void; onDiscard: () => void }) {
   return (
     <div className="post">
       <div className="wordmark">W H O &nbsp; R U N S</div>
@@ -466,7 +596,7 @@ function PostScreen({ stats, onDone }: { stats: RunStats; onDone: () => void }) 
       </div>
       <div className="divh" />
       <div className="row">
-        <Big value={stats.sqm > 0 ? `${(stats.sqm/1000).toFixed(1)}k` : '—'} label="SQM" accent />
+        <Big value={stats.sqm > 0 ? `${(stats.sqm / 1000).toFixed(1)}k` : '—'} label="SQM" accent />
         <div className="sep" />
         <Big value={stats.sqm > 0 ? Math.round(stats.sqm * 0.074).toLocaleString() : '—'} label="POINTS" />
         <div className="sep" />
@@ -474,8 +604,14 @@ function PostScreen({ stats, onDone }: { stats: RunStats; onDone: () => void }) 
       </div>
 
       <div className="actions">
-        <button className="act confirm" onClick={onDone}>✓</button>
-        <button className="act discard" onClick={onDone}>✕</button>
+        <button className="act confirm" onClick={onConfirm}>
+          <span className="act-icon">✓</span>
+          <span className="act-label">SAVE RUN</span>
+        </button>
+        <button className="act discard" onClick={onDiscard}>
+          <span className="act-icon">✕</span>
+          <span className="act-label">DISCARD</span>
+        </button>
       </div>
 
       <style jsx>{`
@@ -501,12 +637,17 @@ function PostScreen({ stats, onDone }: { stats: RunStats; onDone: () => void }) 
           border-top:1px solid var(--line); margin-top:2px;
         }
         .act {
-          height:68px; background:none; border:none;
-          font-size:20px; color:var(--muted); cursor:pointer; transition:.15s;
+          height:72px; background:none; border:none;
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          gap:4px; cursor:pointer; transition:.15s;
         }
+        .act-icon { font-size:18px; color:var(--muted); }
+        .act-label { font-size:8px; letter-spacing:.28em; color:var(--muted); }
         .confirm { border-right:1px solid var(--line); }
-        .confirm:hover { background:rgba(68,255,170,.05); color:var(--green); }
-        .discard:hover { background:rgba(255,68,85,.05); color:var(--red); }
+        .confirm:hover { background:rgba(68,255,170,.05); }
+        .confirm:hover .act-icon, .confirm:hover .act-label { color:var(--green); }
+        .discard:hover { background:rgba(255,68,85,.05); }
+        .discard:hover .act-icon, .discard:hover .act-label { color:var(--red); }
       `}</style>
     </div>
   )
@@ -533,15 +674,16 @@ function Big({ value, label, accent }: { value: string; label: string; accent?: 
   )
 }
 
-function BottomBar({ activeTab, onTabChange }: { activeTab:'me'|'team'; onTabChange:(t:'me'|'team')=>void }) {
+function BottomBar({ activeTab, onTabChange }: { activeTab: 'me' | 'team' | 'history'; onTabChange: (t: 'me' | 'team' | 'history') => void }) {
   return (
     <div className="bar">
-      <button className={`tab ${activeTab==='me'?'on':''}`} onClick={()=>onTabChange('me')}>ME</button>
-      <button className={`tab ${activeTab==='team'?'on':''}`} onClick={()=>onTabChange('team')}>TEAM</button>
+      <button className={`tab ${activeTab === 'me' ? 'on' : ''}`} onClick={() => onTabChange('me')}>ME</button>
+      <button className={`tab ${activeTab === 'team' ? 'on' : ''}`} onClick={() => onTabChange('team')}>TEAM</button>
+      <button className={`tab ${activeTab === 'history' ? 'on' : ''}`} onClick={() => onTabChange('history')}>RUNS</button>
       <style jsx>{`
         .bar {
           position:absolute; bottom:0; left:0; right:0; height:56px;
-          display:grid; grid-template-columns:1fr 1fr;
+          display:grid; grid-template-columns:1fr 1fr 1fr;
           background:var(--panel); border-top:1px solid var(--line);
           backdrop-filter:blur(14px); z-index:10;
         }
