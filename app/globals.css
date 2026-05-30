@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 @import 'leaflet/dist/leaflet.css';
 
 *, *::before, *::after {
@@ -8,31 +8,29 @@
 }
 
 :root {
-  --bg: #04070b;
-  --panel: rgba(10,14,20,0.92);
-  --line: rgba(255,255,255,0.07);
-  --text: #eef6ff;
-  --muted: rgba(223,234,246,0.42);
-  --cyan: #00d8ff;
-  --cyan-soft: rgba(0,216,255,0.12);
-  --green: #59ffad;
-  --red: #ff5a67;
-  --font-display: 'Syne', sans-serif;
-  --font-mono: 'DM Mono', monospace;
+  --bg: #0a0d12;
+  --panel: rgba(10,13,18,0.9);
+  --line: rgba(255,255,255,0.08);
+  --text: #f0f4ff;
+  --muted: rgba(200,215,235,0.4);
+  --cyan: #00c8f0;
+  --green: #44ffaa;
+  --red: #ff4455;
+  --font: 'Inter', -apple-system, Helvetica Neue, Helvetica, Arial, sans-serif;
 }
 
 html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-mono);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
 }
 
-/* Leaflet overrides */
-.leaflet-container {
-  background: #07111a;
-}
-.leaflet-control-attribution {
-  display: none !important;
-}
+.leaflet-container { background: #dde2e8; }
+.leaflet-control-attribution { display: none !important; }
+.leaflet-control-zoom { display: none !important; }

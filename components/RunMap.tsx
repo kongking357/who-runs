@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import type { Map, Marker, Polyline } from 'leaflet'
+import type { Map, Marker, Polyline, Polygon } from 'leaflet'
 import type { GPSPoint } from '@/lib/gps'
 
 interface TeamRunner {
@@ -11,6 +11,11 @@ interface TeamRunner {
   longitude: number
 }
 
+interface ClosedPolygon {
+  points: GPSPoint[]
+  sqm: number
+}
+
 interface RunMapProps {
   center: [number, number]
   myPosition: GPSPoint | null
@@ -18,6 +23,8 @@ interface RunMapProps {
   teamRunners: TeamRunner[]
   zoom?: number
   followUser?: boolean
+  closedPolygons: ClosedPolygon[]
+  loopFlash?: boolean
 }
 
 export default function RunMap({
@@ -27,17 +34,19 @@ export default function RunMap({
   teamRunners,
   zoom = 16,
   followUser = false,
+  closedPolygons,
+  loopFlash = false,
 }: RunMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<Map | null>(null)
   const myMarkerRef = useRef<Marker | null>(null)
   const routeLineRef = useRef<Polyline | null>(null)
   const teamMarkersRef = useRef<globalThis.Map<string, Marker>>(new globalThis.Map())
+  const polygonLayersRef = useRef<Polygon[]>([])
 
-  // Initialize map once
+  // Init map once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
-
     const L = require('leaflet')
 
     const map = L.map(containerRef.current, {
@@ -48,20 +57,23 @@ export default function RunMap({
       doubleClickZoom: false,
     }).setView(center, zoom)
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // Light map tile
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
     }).addTo(map)
 
     mapRef.current = map
-
-    return () => {
-      map.remove()
-      mapRef.current = null
-    }
+    return () => { map.remove(); mapRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Update my marker
+  // Follow user / re-center
+  useEffect(() => {
+    if (!mapRef.current || !myPosition) return
+    if (followUser) mapRef.current.setView([myPosition.lat, myPosition.lng], mapRef.current.getZoom())
+  }, [myPosition, followUser])
+
+  // My marker
   useEffect(() => {
     if (!mapRef.current || !myPosition) return
     const L = require('leaflet')
@@ -69,13 +81,13 @@ export default function RunMap({
     const icon = L.divIcon({
       className: '',
       html: `<div style="
-        width:16px;height:16px;border-radius:50%;
-        background:#ff5a67;
-        box-shadow:0 0 16px rgba(255,90,103,0.8);
-        border:2px solid rgba(255,255,255,0.6);
+        width:14px;height:14px;border-radius:50%;
+        background:#ff4455;
+        box-shadow:0 0 12px rgba(255,68,85,0.75);
+        border:2px solid rgba(255,255,255,0.9);
       "></div>`,
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
     })
 
     if (myMarkerRef.current) {
@@ -83,77 +95,79 @@ export default function RunMap({
     } else {
       myMarkerRef.current = L.marker([myPosition.lat, myPosition.lng], { icon }).addTo(mapRef.current)
     }
+  }, [myPosition])
 
-    if (followUser) {
-      mapRef.current.setView([myPosition.lat, myPosition.lng], mapRef.current.getZoom())
-    }
-  }, [myPosition, followUser])
-
-  // Draw route
+  // Route line
   useEffect(() => {
-    if (!mapRef.current || route.length < 2) return
+    if (!mapRef.current) return
     const L = require('leaflet')
-
+    if (route.length < 2) {
+      if (routeLineRef.current) { routeLineRef.current.remove(); routeLineRef.current = null }
+      return
+    }
     const coords = route.map((p) => [p.lat, p.lng] as [number, number])
-
     if (routeLineRef.current) {
       routeLineRef.current.setLatLngs(coords)
     } else {
       routeLineRef.current = L.polyline(coords, {
-        color: '#00d8ff',
-        weight: 3,
-        opacity: 0.85,
+        color: '#00c8f0', weight: 2.5, opacity: 0.9,
       }).addTo(mapRef.current)
     }
   }, [route])
 
-  // Update team markers
+  // Closed polygons — draw filled area with flash animation
   useEffect(() => {
     if (!mapRef.current) return
     const L = require('leaflet')
-    const markers = teamMarkersRef.current as unknown as globalThis.Map<string, Marker>
 
-    const teamIcon = L.divIcon({
+    // Remove old polygon layers
+    polygonLayersRef.current.forEach((p) => p.remove())
+    polygonLayersRef.current = []
+
+    closedPolygons.forEach(({ points }) => {
+      const coords = points.map((p) => [p.lat, p.lng] as [number, number])
+      const poly = L.polygon(coords, {
+        color: '#00c8f0',
+        weight: 2,
+        opacity: 0.9,
+        fillColor: '#00c8f0',
+        fillOpacity: loopFlash ? 0.35 : 0.15,
+      }).addTo(mapRef.current!)
+      polygonLayersRef.current.push(poly)
+    })
+  }, [closedPolygons, loopFlash])
+
+  // Team markers
+  useEffect(() => {
+    if (!mapRef.current) return
+    const L = require('leaflet')
+    const markers = teamMarkersRef.current
+
+    const icon = L.divIcon({
       className: '',
-      html: `<div style="
-        width:12px;height:12px;border-radius:50%;
-        background:#00d8ff;
-        box-shadow:0 0 10px rgba(0,216,255,0.6);
-      "></div>`,
-      iconSize: [12, 12],
-      iconAnchor: [6, 6],
+      html: `<div style="width:10px;height:10px;border-radius:50%;background:#00c8f0;box-shadow:0 0 8px rgba(0,200,240,0.6);"></div>`,
+      iconSize: [10, 10], iconAnchor: [5, 5],
     })
 
-    // Add / update markers
-    teamRunners.forEach((runner) => {
-      if (markers.has(runner.user_id)) {
-        markers.get(runner.user_id)!.setLatLng([runner.latitude, runner.longitude])
+    teamRunners.forEach((r) => {
+      if (markers.has(r.user_id)) {
+        markers.get(r.user_id)!.setLatLng([r.latitude, r.longitude])
       } else {
-        const m = L.marker([runner.latitude, runner.longitude], { icon: teamIcon })
-          .bindTooltip(runner.display_name || runner.user_id, { permanent: false })
+        const m = L.marker([r.latitude, r.longitude], { icon })
+          .bindTooltip(r.display_name || r.user_id, { permanent: false })
           .addTo(mapRef.current!)
-        markers.set(runner.user_id, m)
+        markers.set(r.user_id, m)
       }
     })
 
-    // Remove stale markers
-    const activeIds = new Set(teamRunners.map((r) => r.user_id))
-    markers.forEach((marker, id) => {
-      if (!activeIds.has(id)) {
-        marker.remove()
-        markers.delete(id)
-      }
-    })
+    const active = new Set(teamRunners.map((r) => r.user_id))
+    markers.forEach((m, id) => { if (!active.has(id)) { m.remove(); markers.delete(id) } })
   }, [teamRunners])
 
   return (
     <div
       ref={containerRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        filter: 'brightness(0.72) contrast(1.08) saturate(0.9)',
-      }}
+      style={{ width: '100%', height: '100%' }}
     />
   )
 }
